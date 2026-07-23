@@ -19,6 +19,7 @@ import com.flowagent.engine.node.WorkflowNodeHandler;
 import com.flowagent.engine.node.FlowEventCallback;
 import com.flowagent.engine.node.callback.WorkflowMsgCallback;
 import com.flowagent.engine.util.FlowUtil;
+import com.flowagent.engine.core.EngineProperties;
 import com.flowagent.common.exception.ErrorCode;
 import com.flowagent.common.exception.NodeCustomException;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +34,9 @@ import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -49,15 +52,28 @@ public class ParallelWorkflowEngine {
     private final TopologyValidator topologyValidator;
     private final GraphBuilder graphBuilder;
 
-    public ParallelWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator, GraphBuilder graphBuilder) {
+    public ParallelWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator, GraphBuilder graphBuilder, EngineProperties engineProperties) {
         this.topologyValidator = topologyValidator;
         this.graphBuilder = graphBuilder;
         this.nodeExecutors = new HashMap<>();
         for (WorkflowNodeHandler executor : executors) {
             this.nodeExecutors.put(executor.getNodeType(), executor);
         }
-        this.executorService = TtlExecutors.getTtlExecutorService(Executors.newCachedThreadPool());
-        log.info("Registered {} node executors for ParallelEngine", nodeExecutors.size());
+        // Bounded thread pool: prevents resource exhaustion under high concurrency.
+        // CallerRunsPolicy provides backpressure — when pool+queue are full,
+        // the submitting thread runs the task itself, naturally throttling throughput.
+        this.executorService = TtlExecutors.getTtlExecutorService(
+                new ThreadPoolExecutor(
+                        engineProperties.getCorePoolSize(),
+                        engineProperties.getMaxPoolSize(),
+                        engineProperties.getKeepAliveSeconds(),
+                        TimeUnit.SECONDS,
+                        new LinkedBlockingQueue<>(engineProperties.getQueueCapacity()),
+                        new ThreadPoolExecutor.CallerRunsPolicy()
+                )
+        );
+        log.info("Registered {} node executors for ParallelEngine (pool: core={}, max={}, queue={})",
+                nodeExecutors.size(), engineProperties.getCorePoolSize(), engineProperties.getMaxPoolSize(), engineProperties.getQueueCapacity());
     }
 
     public void execute(WorkflowDSL workflowDSL, WorkflowContextStore variablePool, Map<String, Object> inputs, FlowEventCallback callback) throws Exception {

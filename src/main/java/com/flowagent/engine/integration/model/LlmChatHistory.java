@@ -14,6 +14,9 @@ import java.util.concurrent.TimeUnit;
  * LLM chat history cache.
  * Key: ChatId + NodeId combination
  * Value: fixed-length conversation history list
+ *
+ * Sliding-window strategy: when estimated tokens exceed the configured budget,
+ * the oldest messages are discarded, retaining system prompt + recent N rounds.
  */
 public class LlmChatHistory {
 
@@ -32,6 +35,18 @@ public class LlmChatHistory {
      * Max history length per session
      */
     private static final int MAX_HISTORY_LENGTH = 10;
+
+    /**
+     * Maximum token budget for LLM context window.
+     * Sliding-window: drop oldest messages when estimated tokens exceed this limit.
+     */
+    private static int maxContextTokens = 8192;
+
+    /**
+     * Rough token estimation factor: ~4 chars per token for English, ~2 chars per token for Chinese.
+     * We use a conservative average of 3 chars/token.
+     */
+    private static final int CHAR_PER_TOKEN = 3;
 
     /**
      * Chat message entity using record type
@@ -184,9 +199,82 @@ public class LlmChatHistory {
     }
 
     /**
+     * Set max token budget for context window (called from EngineConfiguration).
+     */
+    public static void setMaxContextTokens(int tokens) {
+        maxContextTokens = tokens;
+    }
+
+    /**
+     * Retrieve chat history with token-budget sliding window.
+     * When estimated tokens exceed maxContextTokens, oldest ChatItems are dropped
+     * until the budget is satisfied, always retaining at least 1 recent round.
+     *
+     * @param chatId Session ID
+     * @param nodeId Node ID
+     * @return Token-budgeted chat history list
+     */
+    public static List<ChatItem> getHistoryByTokenBudget(String chatId, String nodeId) {
+        String key = generateKey(chatId, nodeId);
+        ConcurrentLinkedQueue<ChatItem> queue = chatHistoryCache.getUnchecked(key);
+        List<ChatItem> allItems = new ArrayList<>(queue);
+
+        // Estimate total tokens across all items
+        int totalTokens = estimateTokens(allItems);
+
+        // Sliding-window: drop oldest items while over budget, keep at least 1
+        while (totalTokens > maxContextTokens && allItems.size() > 1) {
+            ChatItem removed = allItems.remove(0);
+            totalTokens -= estimateTokens(removed);
+        }
+
+        return allItems;
+    }
+
+    /**
+     * Estimate tokens for a list of ChatItems.
+     */
+    private static int estimateTokens(List<ChatItem> items) {
+        int total = 0;
+        for (ChatItem item : items) {
+            total += estimateTokens(item);
+        }
+        return total;
+    }
+
+    /**
+     * Estimate tokens for a single ChatItem.
+     * Rough estimation: sum all message content lengths / CHAR_PER_TOKEN.
+     */
+    private static int estimateTokens(ChatItem item) {
+        int total = 0;
+        total += sumContentTokens(item.userInputs());
+        total += sumContentTokens(item.llmThinking());
+        total += sumContentTokens(item.llmResponses());
+        return total;
+    }
+
+    private static int sumContentTokens(List<ChatMessage> messages) {
+        int total = 0;
+        for (ChatMessage msg : messages) {
+            if (msg.content() != null) {
+                total += msg.content().length() / CHAR_PER_TOKEN + 1;
+            }
+        }
+        return total;
+    }
+
+    /**
      * Get cache instance (for testing or special purposes)
      */
     public static LoadingCache<String, ConcurrentLinkedQueue<ChatItem>> getCache() {
         return chatHistoryCache;
+    }
+
+    /**
+     * Get max context tokens config (for testing)
+     */
+    public static int getMaxContextTokens() {
+        return maxContextTokens;
     }
 }
