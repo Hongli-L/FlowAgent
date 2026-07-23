@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -82,8 +81,8 @@ public class ParallelWorkflowEngine {
         verifyWorkflow(workflowDSL);
         variablePool.clear();
 
-        Queue<ChatCallBackStreamResult> orderStreamResultQ = new ConcurrentLinkedQueue<>();
-        Queue<LLMGenerate> streamQueue = new ConcurrentLinkedQueue<>();
+        Queue<ChatCallBackStreamResult> orderStreamResultQ = new LinkedBlockingQueue<>();
+        Queue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
 
         Node endNode = workflowDSL.getNodes().stream().filter(s -> s.getNodeType() == NodeTypeEnum.END).findFirst().orElseThrow();
         String sid = FlowUtil.genWorkflowId(workflowDSL.getFlowId());
@@ -113,7 +112,10 @@ public class ParallelWorkflowEngine {
 
             // Wait for completion
             workflowFuture.get();
-            
+
+            // Normalize unreachable MARK nodes to SKIP after execution
+            normalizeMarkNodes(workflowDSL);
+
             log.info("Parallel Workflow: {} execution completed successfully", sid);
             workflowCallback.onWorkflowEnd(new NodeRunResult());
         } catch (Exception e) {
@@ -276,6 +278,17 @@ public class ParallelWorkflowEngine {
         for (Node node : workflowDSL.getNodes()) {
             if (nodeExecutors.get(node.getNodeType()) == null) {
                 throw new IllegalStateException("Invalid workflow DSL: executor not found");
+            }
+        }
+    }
+
+    /**
+     * Normalize unreachable MARK nodes to SKIP after workflow execution.
+     */
+    private void normalizeMarkNodes(WorkflowDSL workflowDSL) {
+        for (Node node : workflowDSL.getNodes()) {
+            if (node.getStatus() == NodeStatusEnum.MARK) {
+                node.setStatus(NodeStatusEnum.SKIP);
             }
         }
     }

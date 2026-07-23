@@ -6,60 +6,63 @@ import com.flowagent.engine.domain.callbacks.ChatCallBackStreamResult;
 import com.flowagent.engine.domain.callbacks.ChatCallBacks;
 import com.flowagent.engine.domain.callbacks.LLMGenerate;
 import com.flowagent.engine.node.FlowEventCallback;
-import com.flowagent.engine.util.AsyncUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 
 /**
- * Workflow stream callback implementation that bridges ChatCallBacks with FlowEventCallback
- * This class handles workflow events and forwards them to the underlying FlowEventCallback
+ * Workflow stream callback implementation that bridges ChatCallBacks with FlowEventCallback.
+ * Uses LinkedBlockingQueue with take() for zero-CPU-waste blocking, and POISON_PILL
+ * for graceful consumer thread termination.
  */
 @Slf4j
 public class WorkflowMsgCallback implements FlowEventCallback {
 
+    /** Sentinel object to signal consumer thread termination */
+    private static final LLMGenerate POISON_PILL = new LLMGenerate();
+
     private final ChatCallBacks chatCallBacks;
     private final FlowEventCallback clientCallback;
-
-    private volatile boolean tag = true;
-    private volatile boolean scheduleTaskOver = false;
+    private final BlockingQueue<LLMGenerate> streamQueue;
+    private final Thread consumerThread;
 
     public WorkflowMsgCallback(String sid,
                                FlowEventCallback clientCallback,
                                EndNodeOutputModeEnum endNodeOutputMode,
-                               Queue<LLMGenerate> streamQueue,
+                               BlockingQueue<LLMGenerate> streamQueue,
                                Queue<ChatCallBackStreamResult> needOrderStreamResultQ) {
         this.clientCallback = clientCallback;
+        this.streamQueue = streamQueue;
         this.chatCallBacks = new ChatCallBacks(
                 sid,
-                streamQueue, // streamQueue is handled internally
+                streamQueue, // BlockingQueue implements Queue; ChatCallBacks uses offer() only
                 endNodeOutputMode,
                 Set.of(),
                 needOrderStreamResultQ
         );
 
-
-        // Consumer thread: pull LLM stream output from queue and forward to client
-        AsyncUtil.execute(() -> {
-            while (tag) {
-                try {
-                    // Block-wait for data availability
-                    while (streamQueue.isEmpty() && tag) {
-                        AsyncUtil.sleep(10); // Brief sleep to avoid busy-wait
+        // Consumer thread: blocking-wait for stream data via take(), forward to client
+        // LinkedBlockingQueue.take() blocks until data is available, eliminating CPU busy-wait
+        // POISON_PILL gracefully terminates consumer thread when workflow finishes
+        consumerThread = new Thread(() -> {
+            try {
+                while (true) {
+                    LLMGenerate resp = streamQueue.take();
+                    if (resp == POISON_PILL) {
+                        break;
                     }
-
-                    LLMGenerate resp = streamQueue.poll();
-                    if (resp != null) {
-                        clientCallback.callback("stream", resp);
-                    }
-                } catch (Exception e) {
-                    log.error("Error in stream callback", e);
+                    clientCallback.callback("stream", resp);
                 }
+            } catch (InterruptedException e) {
+                log.error("Consumer thread interrupted", e);
+                Thread.currentThread().interrupt();
             }
-            scheduleTaskOver = true;
-        });
+        }, "workflow-stream-consumer");
+        consumerThread.setDaemon(true);
+        consumerThread.start();
     }
 
     /**
@@ -137,19 +140,20 @@ public class WorkflowMsgCallback implements FlowEventCallback {
         clientCallback.callback(eventType, data);
     }
 
-
+    /**
+     * Signal consumer thread to terminate and wait for it to finish.
+     * POISON_PILL unblocks take() and causes consumer to exit after processing all pending items.
+     */
     public void finished() {
-        tag = false;
-        while (!scheduleTaskOver) {
-            AsyncUtil.sleep(10);
+        streamQueue.offer(POISON_PILL);
+        try {
+            consumerThread.join(5000);
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for consumer thread to finish", e);
+            Thread.currentThread().interrupt();
         }
 
-        // Wait for async consumer thread to finish before draining remaining events
-        while (!chatCallBacks.getStreamQueue().isEmpty()) {
-            var resp = chatCallBacks.getStreamQueue().poll();
-            callback("stream", resp);
-        }
-
+        // Drain ordered stream results
         while (!chatCallBacks.getOrderStreamResultQ().isEmpty()) {
             var resp = chatCallBacks.getOrderStreamResultQ().poll();
             clientCallback.callback("stream", resp.getNodeAnswerContent());

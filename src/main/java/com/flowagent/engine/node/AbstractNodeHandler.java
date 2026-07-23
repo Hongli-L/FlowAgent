@@ -106,12 +106,21 @@ public abstract class AbstractNodeHandler implements WorkflowNodeHandler {
 
     protected NodeRunResult doExecuteWithTimeout(NodeState nodeState, RetryConfig retryConfig) {
         if (retryConfig.timeOutEnabled()) {
-            // Timeout enabled scenario
+            // Timeout enabled scenario: wrap execution with time limit
             try {
                 return AsyncUtil.callWithTimeLimit(retryConfig.toMillis(), TimeUnit.MILLISECONDS,
                         () -> this.doExecute(nodeState));
-            } catch (TimeoutException | InterruptedException e) {
-                // Timeout: fall through to error handling
+            } catch (TimeoutException e) {
+                // Timeout fallback: node exceeded time limit, degrade to error strategy
+                log.warn("Node {} timed out after {}ms, degrading to error strategy",
+                        nodeState.node().getId(), retryConfig.toMillis());
+                NodeRunResult result = new NodeRunResult();
+                result.setError(new NodeCustomException(ErrorCode.TIMEOUT_ERROR));
+                return errorResponse(nodeState, result);
+            } catch (InterruptedException e) {
+                // Thread interrupted: treat as timeout fallback
+                log.warn("Node {} execution interrupted, degrading to error strategy",
+                        nodeState.node().getId());
                 NodeRunResult result = new NodeRunResult();
                 result.setError(new NodeCustomException(ErrorCode.TIMEOUT_ERROR));
                 return errorResponse(nodeState, result);
@@ -286,10 +295,18 @@ public abstract class AbstractNodeHandler implements WorkflowNodeHandler {
 
 
     /**
-     * Build error response for node execution
+     * Build error response based on configured error strategy.
+     * <p>
+     * Three strategies are supported:
+     * - ERR_CODE: emit custom output and continue on normal branch (error as data)
+     * - ERR_CONDITION: route execution to fail-branch nodes (error as branch)
+     * - ERR_INTERRUPT: halt workflow execution immediately (error as interrupt)
+     * <p>
+     * When no retry config is present, defaults to ERR_INTERRUPT.
      *
      * @param nodeState node execution state
-     * @param result    node run result
+     * @param result    node run result containing error information
+     * @return node run result with status set according to error strategy
      */
     private NodeRunResult errorResponse(NodeState nodeState, NodeRunResult result) {
         Node node = nodeState.node();

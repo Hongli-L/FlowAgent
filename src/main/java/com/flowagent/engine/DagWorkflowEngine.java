@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Workflow execution engine
@@ -70,8 +70,8 @@ public class DagWorkflowEngine {
         variablePool.clear();
 
         // Create workflow callback handler
-        Queue<ChatCallBackStreamResult> orderStreamResultQ = new ConcurrentLinkedQueue<>();
-        Queue<LLMGenerate> streamQueue = new ConcurrentLinkedQueue<>();
+        Queue<ChatCallBackStreamResult> orderStreamResultQ = new LinkedBlockingQueue<>();
+        Queue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
 
         Node endNode = workflowDSL.getNodes().stream().filter(s -> s.getNodeType() == NodeTypeEnum.END).findFirst().get();
         String sid = FlowUtil.genWorkflowId(workflowDSL.getFlowId());
@@ -98,6 +98,9 @@ public class DagWorkflowEngine {
 
             // Execute orchestrated workflow nodes
             executeNode(startNode, variablePool, workflowCallback);
+
+            // Normalize unreachable MARK nodes to SKIP after execution
+            normalizeMarkNodes(workflowDSL);
 
             log.info("Workflow: {} execution completed successfully", sid);
             // Emit workflow end event
@@ -252,6 +255,22 @@ public class DagWorkflowEngine {
         // Error path
         for (Node failNode : node.getFailNodes()) {
             executeNode(failNode, variablePool, callback);
+        }
+    }
+
+    /**
+     * Normalize unreachable MARK nodes to SKIP after workflow execution.
+     * Nodes in MARK state were tentatively marked for skip evaluation but never visited;
+     * they are definitively unreachable and should be normalized to SKIP.
+     */
+    private void normalizeMarkNodes(WorkflowDSL workflowDSL) {
+        for (Node node : workflowDSL.getNodes()) {
+            if (node.getStatus() == NodeStatusEnum.MARK) {
+                node.setStatus(NodeStatusEnum.SKIP);
+                if (log.isDebugEnabled()) {
+                    log.debug("Normalized unreachable MARK node {} to SKIP", node.getId());
+                }
+            }
         }
     }
 }

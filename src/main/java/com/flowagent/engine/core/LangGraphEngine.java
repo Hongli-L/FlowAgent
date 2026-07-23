@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
@@ -88,8 +88,8 @@ public class LangGraphEngine implements WorkflowExecutionEngine {
         Node startNode = graphBuildResult.getStartNode();
         initializeStartNodeInputs(startNode, variablePool, inputs);
 
-        Queue<ChatCallBackStreamResult> orderStreamResultQ = new ConcurrentLinkedQueue<>();
-        Queue<LLMGenerate> streamQueue = new ConcurrentLinkedQueue<>();
+        Queue<ChatCallBackStreamResult> orderStreamResultQ = new LinkedBlockingQueue<>();
+        Queue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
         Node endNode = workflowDSL.getNodes().stream()
                 .filter(n -> n.getNodeType() == NodeTypeEnum.END)
                 .findFirst()
@@ -120,6 +120,9 @@ public class LangGraphEngine implements WorkflowExecutionEngine {
             for (var ignored : compiled.stream(initState)) {
                 // consume stream; node side-effects update WorkflowContextStore / callbacks
             }
+
+            // Normalize unreachable MARK nodes to SKIP after execution
+            normalizeMarkNodes(workflowDSL);
 
             log.info("LangGraphEngine workflow {} completed", sid);
             workflowCallback.onWorkflowEnd(new NodeRunResult());
@@ -273,6 +276,19 @@ public class LangGraphEngine implements WorkflowExecutionEngine {
     private void initializeStartNodeInputs(Node startNode, WorkflowContextStore variablePool, Map<String, Object> inputs) {
         for (Map.Entry<String, Object> entry : inputs.entrySet()) {
             variablePool.set(startNode.getId(), entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * Normalize unreachable MARK nodes to SKIP after workflow execution.
+     * Nodes in MARK state were tentatively marked for skip evaluation but never visited;
+     * they are definitively unreachable and should be normalized to SKIP.
+     */
+    private void normalizeMarkNodes(WorkflowDSL workflowDSL) {
+        for (Node node : workflowDSL.getNodes()) {
+            if (node.getStatus() == NodeStatusEnum.MARK) {
+                node.setStatus(NodeStatusEnum.SKIP);
+            }
         }
     }
 }
