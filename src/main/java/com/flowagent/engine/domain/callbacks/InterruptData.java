@@ -10,8 +10,7 @@ import java.util.HashMap;
  * 
  * This class contains information about workflow interruption events,
  * including event identification and context data.
- * 
- * @version 1.0.0
+ *
  */
 public class InterruptData {
     /**

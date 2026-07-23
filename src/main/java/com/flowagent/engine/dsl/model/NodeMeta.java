@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class represents the metadata associated with a single node in a workflow,
  * including the node type and human-readable alias name.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

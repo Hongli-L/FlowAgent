@@ -10,8 +10,7 @@ import org.springframework.stereotype.Service;
 /**
  * Model service client.
  * Calls console-hub's model API to execute LLM inference.
- * 
- * @version 1.0.0
+ *
  */
 @Slf4j
 @Service

@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
  * <p>
  * This class encapsulates the result of a node execution in a streaming context,
  * including the node identifier, generated content, and completion status.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

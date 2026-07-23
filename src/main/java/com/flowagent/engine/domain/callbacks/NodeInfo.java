@@ -10,8 +10,7 @@ import java.util.HashMap;
  * 
  * This class contains metadata about a node's execution including inputs,
  * outputs, execution time, and completion status.
- * 
- * @version 1.0.0
+ *
  */
 public class NodeInfo {
     /**

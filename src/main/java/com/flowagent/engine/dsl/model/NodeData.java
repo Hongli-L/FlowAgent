@@ -15,8 +15,7 @@ import java.util.Map;
  * 
  * This class represents the data associated with a single node in a workflow,
  * including input parameters, node metadata, and node-specific parameters.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

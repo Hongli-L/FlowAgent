@@ -5,8 +5,7 @@ package com.flowagent.engine.domain.callbacks;
  * 
  * This class represents a single step in the workflow execution process,
  * containing node information, sequence number, and progress tracking.
- * 
- * @version 1.0.0
+ *
  */
 public class WorkflowStep {
     /**

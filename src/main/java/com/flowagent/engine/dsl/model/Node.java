@@ -16,8 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 
  * This class represents a single node in a workflow,
  * with a unique identifier, data configuration, and execution status.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

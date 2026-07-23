@@ -13,6 +13,9 @@ logs/
 _reference/
 .git.paiFlow-original-backup/
 
+# Redundant modules not part of the project history
+src/main/java/com/flowagent/link/
+
 # IDE - IntelliJ IDEA
 .idea/
 *.iml
@@ -39,4 +42,14 @@ Thumbs.db
 application-local.yml
 application-local.yaml
 application-local.properties
-src/main/resources/application-local.yml
+
+# WorkBuddy workspace data (not for version control)
+.workbuddy/
+
+# Java version marker (local SDK management)
+.java-version
+
+# Planning documents (internal, not for public repo)
+DEVELOPMENT_PLAN.md
+REBUILD_PLAN.md
+ENGINES.md

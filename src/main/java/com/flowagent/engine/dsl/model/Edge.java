@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class represents a directed connection between two nodes,
  * with a source node, target node, and optional source handle.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

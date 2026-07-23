@@ -7,8 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * 
  * This class represents incremental content changes in streaming responses,
  * including the main content and reasoning content.
- * 
- * @version 1.0.0
+ *
  */
 public class Delta {
     /**

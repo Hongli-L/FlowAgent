@@ -12,8 +12,7 @@ import java.util.Map;
  * 
  * This class represents a single output item of a node in a workflow,
  * including the output name, schema definition, and whether it is required.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

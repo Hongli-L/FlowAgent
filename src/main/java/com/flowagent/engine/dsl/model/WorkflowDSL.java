@@ -13,8 +13,7 @@ import java.util.List;
 /**
  * Workflow DSL (Domain Specific Language) structure.
  * Represents the complete workflow definition with nodes and edges.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

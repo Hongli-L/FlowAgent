@@ -12,8 +12,7 @@ import java.util.HashMap;
  *
  * This class represents the complete response structure for workflow execution,
  * compatible with OpenAI's streaming API format.
- * 
- * @version 1.0.0
+ *
  */
 public class LLMGenerate {
     /**

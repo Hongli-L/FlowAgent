@@ -7,8 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * 
  * This class represents a single choice in the response, containing delta content
  * and completion information.
- * 
- * @version 1.0.0
+ *
  */
 public class Choice {
     /**

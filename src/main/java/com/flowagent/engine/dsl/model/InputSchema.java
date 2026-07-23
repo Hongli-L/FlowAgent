@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class represents the schema for an input parameter,
  * including its data type and value definition.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

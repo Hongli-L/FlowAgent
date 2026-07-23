@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class represents a single input parameter in a workflow,
  * with a unique identifier, name, and schema definition.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

@@ -1,0 +1,69 @@
+{
+  "flowId": "wf-linear-demo",
+  "nodes": [
+    {
+      "id": "node-start::001",
+      "data": {
+        "nodeMeta": {
+          "title": "Start",
+          "description": "Entry point — receives user query"
+        },
+        "inputs": [
+          {
+            "name": "query",
+            "type": "string",
+            "value": "tell me about Java"
+          }
+        ]
+      }
+    },
+    {
+      "id": "llm::002",
+      "data": {
+        "nodeMeta": {
+          "title": "LLM Response",
+          "description": "Generate answer from LLM"
+        },
+        "inputs": [
+          {
+            "name": "prompt",
+            "type": "string",
+            "value": "{{node-start::001.outputs.query}}"
+          }
+        ],
+        "nodeParam": {
+          "model": "gpt-4o-mini",
+          "temperature": 0.7
+        },
+        "retryConfig": {
+          "shouldRetry": true,
+          "maxRetries": 2,
+          "retryInterval": 1000,
+          "timeOutEnabled": true,
+          "toMillis": 30000,
+          "errorStrategy": "err_interrupt"
+        }
+      }
+    },
+    {
+      "id": "node-end::003",
+      "data": {
+        "nodeMeta": {
+          "title": "End",
+          "description": "Terminal node — outputs LLM response"
+        },
+        "inputs": [
+          {
+            "name": "answer",
+            "type": "string",
+            "value": "{{llm::002.outputs.text}}"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "sourceNodeId": "node-start::001", "targetNodeId": "llm::002" },
+    { "sourceNodeId": "llm::002", "targetNodeId": "node-end::003" }
+  ]
+}

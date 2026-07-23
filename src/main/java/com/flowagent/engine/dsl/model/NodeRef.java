@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class represents a reference to a specific output variable of a node in a workflow,
  * using the node ID and variable name.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor

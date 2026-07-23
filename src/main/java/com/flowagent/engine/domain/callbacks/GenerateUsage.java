@@ -7,8 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * 
  * This class tracks the number of tokens used in prompts, completions,
  * and total usage for billing and monitoring purposes.
- * 
- * @version 1.0.0
+ *
  */
 public class GenerateUsage {
     /**

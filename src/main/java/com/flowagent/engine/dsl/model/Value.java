@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
  * 
  * This class is used to represent the input values of a node in a workflow,
  * which can either be a direct literal value or a reference to an output variable of another node.
- * 
- * @version 1.0.0
+ *
  */
 @Data
 @NoArgsConstructor
