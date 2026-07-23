@@ -1,0 +1,42 @@
+# Maven
+target/
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
+hs_err_pid*.log
+logs/
+
+# Local reference source (original project, not for version control)
+_reference/
+.git.paiFlow-original-backup/
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# IDE - Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IDE - VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config & secrets
+.env
+*.env
+application-local.yml
+application-local.yaml
+application-local.properties
+src/main/resources/application-local.yml
