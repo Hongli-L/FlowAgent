@@ -11,7 +11,7 @@ logs/
 
 # Local reference source (original project, not for version control)
 _reference/
-.git.paiFlow-original-backup/
+.git.original-backup/
 
 # Redundant modules not part of the project history
 src/main/java/com/flowagent/link/
@@ -51,5 +51,4 @@ application-local.properties
 
 # Planning documents (internal, not for public repo)
 DEVELOPMENT_PLAN.md
-REBUILD_PLAN.md
 ENGINES.md
