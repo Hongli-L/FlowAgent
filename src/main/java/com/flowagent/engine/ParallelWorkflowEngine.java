@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -82,7 +83,7 @@ public class ParallelWorkflowEngine {
         variablePool.clear();
 
         Queue<ChatCallBackStreamResult> orderStreamResultQ = new LinkedBlockingQueue<>();
-        Queue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
+        BlockingQueue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
 
         Node endNode = workflowDSL.getNodes().stream().filter(s -> s.getNodeType() == NodeTypeEnum.END).findFirst().orElseThrow();
         String sid = FlowUtil.genWorkflowId(workflowDSL.getFlowId());

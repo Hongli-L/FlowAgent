@@ -32,7 +32,7 @@ public class ProtocolController {
         try {
             log.info("Adding workflow: {}", request);
 
-            WorkflowEntity savedEntity = workflowService.saveWorkflow(request);
+            WorkflowEntity savedEntity = workflowService.saveWorkflow(request.getData());
 
             if (request.getData() != null && !request.getData().isEmpty() && !"{}".equals(request.getData())) {
                 log.info("Starting workflow validation");
@@ -82,7 +82,7 @@ public class ProtocolController {
                 }
             }
 
-            workflowService.updateWorkflow(flowId, request);
+            workflowService.updateWorkflow(flowId, request.getData());
             return ApiResponse.success(null, ApiResponse.generateTraceId());
         } catch (Exception e) {
             log.error("Failed to update workflow", e);

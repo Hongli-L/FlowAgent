@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.bsc.langgraph4j.StateGraph.END;
@@ -89,7 +90,7 @@ public class LangGraphEngine implements WorkflowExecutionEngine {
         initializeStartNodeInputs(startNode, variablePool, inputs);
 
         Queue<ChatCallBackStreamResult> orderStreamResultQ = new LinkedBlockingQueue<>();
-        Queue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
+        BlockingQueue<LLMGenerate> streamQueue = new LinkedBlockingQueue<>();
         Node endNode = workflowDSL.getNodes().stream()
                 .filter(n -> n.getNodeType() == NodeTypeEnum.END)
                 .findFirst()

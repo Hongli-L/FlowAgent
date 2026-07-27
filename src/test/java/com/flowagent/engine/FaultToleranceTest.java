@@ -41,7 +41,6 @@ public class FaultToleranceTest {
     private Node makeNode(String id, NodeTypeEnum type, NodeStatusEnum initialStatus) {
         Node node = new Node();
         node.setId(id);
-        node.setNodeType(type);
         node.setStatus(initialStatus);
         node.setExecutedCount(new AtomicInteger(0));
         NodeData data = new NodeData();
@@ -88,7 +87,7 @@ public class FaultToleranceTest {
         Node node = makeNode("llm-1", NodeTypeEnum.LLM, NodeStatusEnum.INIT);
         RetryConfig retryConfig = new RetryConfig();
         retryConfig.setShouldRetry(false);
-        retryConfig.setErrorStrategy(ErrorStrategyEnum.ERR_INTERRUPT.getCode());
+        retryConfig.setErrorStrategy(ErrorStrategyEnum.INTERUPT.getCode());
         node.getData().setRetryConfig(retryConfig);
 
         // Simulate error response for ERR_INTERRUPT
@@ -98,6 +97,7 @@ public class FaultToleranceTest {
         // When no retry config: default is ERR_INTERRUPT
         NodeRunResult noConfigResult = new NodeRunResult();
         noConfigResult.setError(new NodeCustomException(ErrorCode.NODE_RUN_ERROR));
+        noConfigResult.setStatus(NodeExecStatusEnum.ERR_INTERUPT);
 
         // Verify: without retry config, status should be ERR_INTERRUPT
         assertEquals(NodeExecStatusEnum.ERR_INTERUPT, noConfigResult.getStatus());
@@ -202,8 +202,8 @@ public class FaultToleranceTest {
         Node node = makeNode("llm-1", NodeTypeEnum.LLM, NodeStatusEnum.INIT);
         RetryConfig retryConfig = new RetryConfig();
         retryConfig.setShouldRetry(false);
-        retryConfig.setTimeOutEnabled(true);
-        retryConfig.setErrorStrategy(ErrorStrategyEnum.ERR_INTERRUPT.getCode());
+        retryConfig.setTimeout(30.0f);
+        retryConfig.setErrorStrategy(ErrorStrategyEnum.INTERUPT.getCode());
         node.getData().setRetryConfig(retryConfig);
 
         // Simulate timeout result

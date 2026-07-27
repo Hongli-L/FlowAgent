@@ -3,6 +3,7 @@ package com.flowagent.engine.core;
 import com.flowagent.common.enums.NodeExecStatusEnum;
 import com.flowagent.common.enums.NodeStatusEnum;
 import com.flowagent.engine.ParallelWorkflowEngine;
+import com.flowagent.engine.core.EngineProperties;
 import com.flowagent.engine.WorkflowContextStore;
 import com.flowagent.engine.DagWorkflowEngine;
 import com.flowagent.engine.constants.NodeTypeEnum;
@@ -72,7 +73,7 @@ class DualEngineParityTest {
         // --- LEGACY parallel ---
         WorkflowContextStore parPool = new WorkflowContextStore();
         CapturingFlowEventCallback parCb = new CapturingFlowEventCallback();
-        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder);
+        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties());
         parEngine.execute(dsl, parPool, inputs, parCb);
         Map<String, NodeStatusEnum> parStatuses = captureNodeStatuses(dsl);
         Map<String, Map<String, Object>> parPoolSnap = snapshotWorkflowContextStore(parPool, dsl);
@@ -117,19 +118,17 @@ class DualEngineParityTest {
                 "LLM output value should match across engines");
     }
 
-    /**
-     * Branching workflow: start → llm → (success: end_success) / (fail: end_error)
-     * Since stub LLM always succeeds, the success-branch node should be SUCCESS.
-     *
-     * Known behavioral gap (documented by this test):
-     * - LEGACY marks unreachable fail-path nodes as MARK (executeNormalCondition sets MARK,
-     *   but never calls executeNode on them, so MARK→SKIP resolution doesn't fire).
-     * - LANGGRAPH leaves unreachable nodes at INIT (they're never visited in the StateGraph).
-     * - Both statuses represent "not executed", but differ in representation.
-     * - TODO (batch 11): Both engines should resolve unreachable nodes to SKIP at end of execution.
-     */
+        /**
+         * Branching workflow: start → llm → (success: end_success) / (fail: end_error)
+         * Since stub LLM always succeeds, the success-branch node should be SUCCESS.
+         *
+         * Unreachable fail-path nodes are normalized to SKIP at end of execution:
+         * - LEGACY marks them MARK, then the MARK-to-SKIP sweep converts to SKIP.
+         * - LANGGRAPH marks them MARK, then the sweep converts to SKIP.
+         * Both engines agree on the final SKIP status (parity preserved).
+         */
     @Test
-    void branchingWorkflow_successPathExecuted_failPathNotExecuted() throws Exception {
+    void branchingWorkflow_successPathExecuted_failPathSkipped() throws Exception {
         WorkflowDSL dsl = createBranchingDsl();
         Map<String, Object> inputs = Map.of("user_input", "Hello");
 
@@ -156,23 +155,21 @@ class DualEngineParityTest {
         assertEquals(NodeStatusEnum.SUCCESS, lgStatuses.get("node-end::003"),
                 "Success-path end node should be SUCCESS in LANGGRAPH");
 
-        // --- Fail path: documented behavioral gap (consistent across both engines) ---
+        // --- Fail path: unreachable nodes are normalized to SKIP (parity preserved) ---
         // Both engines mark unreachable fail-path nodes as MARK via markOppositeBranch / executeNormalCondition,
-        // but never resolve MARK→SKIP because no node triggers executeNode on them.
-        // This is a known gap that should be fixed (batch 11): post-execution sweep should convert
-        // unreachable MARK nodes to SKIP for cleaner state reporting.
-        assertEquals(NodeStatusEnum.MARK, seqStatuses.get("node-end::004"),
-                "Known gap: LEGACY leaves unreachable fail-path nodes as MARK (should be SKIP)");
-        assertEquals(NodeStatusEnum.MARK, lgStatuses.get("node-end::004"),
-                "Known gap: LANGGRAPH leaves unreachable fail-path nodes as MARK (should be SKIP)");
+        // then the MARK-to-SKIP sweep converts them to SKIP for cleaner state reporting.
+        assertEquals(NodeStatusEnum.SKIP, seqStatuses.get("node-end::004"),
+                "Unreachable fail-path nodes are resolved to SKIP by MARK-to-SKIP normalization");
+        assertEquals(NodeStatusEnum.SKIP, lgStatuses.get("node-end::004"),
+                "Unreachable fail-path nodes are resolved to SKIP by MARK-to-SKIP normalization");
 
         // Both engines agree on the status — parity is maintained even for the gap
         assertEquals(seqStatuses.get("node-end::004"), lgStatuses.get("node-end::004"),
                 "LEGACY and LANGGRAPH should agree on fail-path node status");
 
-        // Neither MARK nor INIT has executed() returning true
-        assertFalse(seqStatuses.get("node-end::004").executed(),
-                "Fail-path node should not be considered executed");
+        // SKIP is a terminal state in the engine model: executed() returns true
+        assertTrue(seqStatuses.get("node-end::004").executed(),
+                "Fail-path node (SKIP) is a terminal state in the engine model");
     }
 
     // =====================================================================
