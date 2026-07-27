@@ -1,5 +1,6 @@
 package com.flowagent.controller;
 
+import com.flowagent.common.ratelimit.RateLimit;
 import com.flowagent.engine.WorkflowContextStore;
 import com.flowagent.engine.core.EngineFactory;
 import com.flowagent.engine.util.AsyncUtil;
@@ -28,6 +29,7 @@ public class WorkflowController {
         this.engineFactory = engineFactory;
     }
 
+    @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter executeWorkflow(@RequestBody WorkflowRequest request) {
         log.info("Workflow execution request: flowId={}, engine={}, mode={}, inputs={}",

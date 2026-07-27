@@ -6,7 +6,25 @@ server:
 spring:
   application:
     name: flowagent
-  
+
+  # Redis middleware (Phase 2.2): Redisson distributed lock + two-level cache + rate limit
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+  # RedissonClient is built explicitly in RedisConfiguration; suppress the starter auto-config
+  # to avoid a duplicate RedissonClient bean.
+  autoconfigure:
+    exclude: org.redisson.spring.starter.RedissonAutoConfiguration
+
   # Database configuration
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -92,3 +110,14 @@ workflow:
     queue-capacity: ${WORKFLOW_QUEUE_CAPACITY:200}
     keep-alive-seconds: 60
     max-context-tokens: ${WORKFLOW_MAX_CONTEXT_TOKENS:8192}
+
+# Redisson client reference (used by RedisConfiguration). The redisson-spring-boot-starter
+# auto-config is excluded, so this block is documentation only; RedisConfiguration reads
+# spring.data.redis instead.
+redisson:
+  config: |
+    singleServerConfig:
+      address: "redis://${REDIS_HOST:localhost}:${REDIS_PORT:6379}"
+      database: ${REDIS_DB:0}
+      connectionPoolSize: 16
+      connectionMinimumIdleSize: 4

@@ -1,5 +1,6 @@
 package com.flowagent.controller;
 
+import com.flowagent.common.ratelimit.RateLimit;
 import com.flowagent.common.response.ApiResponse;
 import com.flowagent.controller.vo.WorkflowAddRequest;
 import com.flowagent.controller.vo.WorkflowReadRequest;
@@ -27,6 +28,7 @@ public class ProtocolController {
         this.workflowService = workflowService;
     }
 
+    @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping("/add")
     public ApiResponse addWorkflow(@RequestBody WorkflowAddRequest request) {
         try {
@@ -54,6 +56,7 @@ public class ProtocolController {
         }
     }
 
+    @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping("/get")
     public ApiResponse getWorkflow(@RequestBody WorkflowReadRequest request) {
         try {
@@ -66,6 +69,7 @@ public class ProtocolController {
         }
     }
 
+    @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping("/update/{flowId}")
     public ApiResponse updateWorkflow(@PathVariable String flowId, @RequestBody WorkflowUpdateRequest request) {
         try {
@@ -91,6 +95,7 @@ public class ProtocolController {
         }
     }
 
+    @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping("/delete")
     public ApiResponse deleteWorkflow(@RequestBody WorkflowReadRequest request) {
         try {
