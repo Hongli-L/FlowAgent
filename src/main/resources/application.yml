@@ -7,6 +7,11 @@ spring:
   application:
     name: flowagent
 
+  # Execute schema.sql on every startup so tables self-bootstrap (idempotent via IF NOT EXISTS).
+  sql:
+    init:
+      mode: always
+
   # Redis middleware (Phase 2.2): Redisson distributed lock + two-level cache + rate limit
   data:
     redis:

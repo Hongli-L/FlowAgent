@@ -3,6 +3,7 @@ package com.flowagent.engine;
 import com.alibaba.ttl.TtlRunnable;
 import com.alibaba.ttl.threadpool.TtlExecutors;
 import com.flowagent.common.enums.EndNodeOutputModeEnum;
+import com.flowagent.common.enums.ExecutionStatusEnum;
 import com.flowagent.common.enums.NodeExecStatusEnum;
 import com.flowagent.common.enums.NodeStatusEnum;
 import com.flowagent.engine.constants.NodeTypeEnum;
@@ -20,6 +21,7 @@ import com.flowagent.engine.node.FlowEventCallback;
 import com.flowagent.engine.node.callback.WorkflowMsgCallback;
 import com.flowagent.engine.util.FlowUtil;
 import com.flowagent.engine.core.EngineProperties;
+import com.flowagent.persistence.service.ExecutionHistoryService;
 import com.flowagent.common.exception.ErrorCode;
 import com.flowagent.common.exception.NodeCustomException;
 import lombok.extern.slf4j.Slf4j;
@@ -47,14 +49,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class ParallelWorkflowEngine {
 
+    private static final String TRIGGER_SOURCE_API = "API";
+
     private final Map<NodeTypeEnum, WorkflowNodeHandler> nodeExecutors;
     private final ExecutorService executorService;
     private final TopologyValidator topologyValidator;
     private final GraphBuilder graphBuilder;
+    private final ExecutionHistoryService executionHistoryService;
 
-    public ParallelWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator, GraphBuilder graphBuilder, EngineProperties engineProperties) {
+    public ParallelWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator,
+                                  GraphBuilder graphBuilder, EngineProperties engineProperties,
+                                  ExecutionHistoryService executionHistoryService) {
         this.topologyValidator = topologyValidator;
         this.graphBuilder = graphBuilder;
+        this.executionHistoryService = executionHistoryService;
         this.nodeExecutors = new HashMap<>();
         for (WorkflowNodeHandler executor : executors) {
             this.nodeExecutors.put(executor.getNodeType(), executor);
@@ -96,6 +104,8 @@ public class ParallelWorkflowEngine {
         );
 
         EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        Long executionId = executionHistoryService.createExecution(workflowDSL.getFlowId(), TRIGGER_SOURCE_API);
+        EngineContextHolder.get().setExecutionId(executionId);
         workflowCallback.onWorkflowStart();
 
         CompletableFuture<Void> workflowFuture = new CompletableFuture<>();
@@ -107,7 +117,7 @@ public class ParallelWorkflowEngine {
 
             // Initial task
             activeTasks.incrementAndGet();
-            executorService.submit(TtlRunnable.get(() -> 
+            executorService.submit(TtlRunnable.get(() ->
                 executeNode(startNode, variablePool, workflowCallback, activeTasks, workflowFuture)
             ));
 
@@ -119,9 +129,11 @@ public class ParallelWorkflowEngine {
 
             log.info("Parallel Workflow: {} execution completed successfully", sid);
             workflowCallback.onWorkflowEnd(new NodeRunResult());
+            executionHistoryService.completeExecution(executionId, ExecutionStatusEnum.SUCCESS.name());
         } catch (Exception e) {
             log.error("Workflow execution failed", e);
             workflowCallback.onWorkflowEnd(new NodeRunResult());
+            executionHistoryService.completeExecution(executionId, ExecutionStatusEnum.FAILED.name());
             throw e;
         } finally {
             workflowCallback.finished();

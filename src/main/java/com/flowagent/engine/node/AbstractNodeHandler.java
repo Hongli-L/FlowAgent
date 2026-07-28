@@ -4,10 +4,12 @@ import cn.hutool.core.util.BooleanUtil;
 import com.alibaba.fastjson2.JSON;
 import com.flowagent.engine.WorkflowContextStore;
 import com.flowagent.common.enums.ErrorStrategyEnum;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.flowagent.common.enums.NodeExecStatusEnum;
 import com.flowagent.engine.constants.NodeTypeEnum;
 import com.flowagent.engine.domain.NodeRunResult;
 import com.flowagent.engine.domain.NodeState;
+import com.flowagent.engine.tracing.ExecutionRecorder;
 import com.flowagent.engine.dsl.model.InputItem;
 import com.flowagent.engine.dsl.model.Node;
 import com.flowagent.engine.dsl.model.RetryConfig;
@@ -31,8 +33,30 @@ import java.util.concurrent.TimeoutException;
 @Slf4j
 public abstract class AbstractNodeHandler implements WorkflowNodeHandler {
 
+    /** Node-level tracer; null-safe so engines/handlers created outside Spring still run. */
+    @Autowired
+    private ExecutionRecorder executionRecorder;
+
     @Override
     public NodeRunResult execute(NodeState nodeState) {
+        long startTs = System.currentTimeMillis();
+        NodeRunResult result = null;
+        try {
+            result = runWithRetry(nodeState);
+        } finally {
+            long durationMs = System.currentTimeMillis() - startTs;
+            if (result != null && executionRecorder != null) {
+                try {
+                    executionRecorder.record(nodeState, result, durationMs);
+                } catch (Exception e) {
+                    log.warn("Node tracing failed for {}", nodeState.node().getId(), e);
+                }
+            }
+        }
+        return result;
+    }
+
+    private NodeRunResult runWithRetry(NodeState nodeState) {
         Node node = nodeState.node();
 
         // Execution count
@@ -155,6 +179,9 @@ public abstract class AbstractNodeHandler implements WorkflowNodeHandler {
                 log.debug("Executing start nodeId: {}, req: {}", node.getId(), JSON.toJSONString(resolvedInputs));
             }
             NodeRunResult executeRes = executeNode(nodeStage, resolvedInputs);
+
+            // Capture resolved inputs for execution tracing
+            executeRes.setInputs(resolvedInputs);
 
             // Store outputs to variable pool
             storeOutputs(node, executeRes.getOutputs(), variablePool);

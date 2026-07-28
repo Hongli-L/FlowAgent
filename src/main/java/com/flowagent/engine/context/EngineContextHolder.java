@@ -43,5 +43,8 @@ public class EngineContextHolder {
         private WorkflowMsgCallback callback;
 
         private String sid;
+
+        /** Snowflake execution id, set by the engine when a run starts (used by node tracing). */
+        private Long executionId;
     }
 }

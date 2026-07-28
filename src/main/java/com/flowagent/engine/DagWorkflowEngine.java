@@ -1,6 +1,7 @@
 package com.flowagent.engine;
 
 import com.flowagent.common.enums.EndNodeOutputModeEnum;
+import com.flowagent.common.enums.ExecutionStatusEnum;
 import com.flowagent.common.enums.NodeExecStatusEnum;
 import com.flowagent.common.enums.NodeStatusEnum;
 import com.flowagent.engine.constants.NodeTypeEnum;
@@ -17,6 +18,7 @@ import com.flowagent.engine.node.WorkflowNodeHandler;
 import com.flowagent.engine.node.FlowEventCallback;
 import com.flowagent.engine.node.callback.WorkflowMsgCallback;
 import com.flowagent.engine.util.FlowUtil;
+import com.flowagent.persistence.service.ExecutionHistoryService;
 import com.flowagent.common.exception.ErrorCode;
 import com.flowagent.common.exception.NodeCustomException;
 import lombok.extern.slf4j.Slf4j;
@@ -39,13 +41,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 @Component
 public class DagWorkflowEngine {
 
+    private static final String TRIGGER_SOURCE_API = "API";
+
     private final Map<NodeTypeEnum, WorkflowNodeHandler> nodeExecutors;
     private final TopologyValidator topologyValidator;
     private final GraphBuilder graphBuilder;
+    private final ExecutionHistoryService executionHistoryService;
 
-    public DagWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator, GraphBuilder graphBuilder) {
+    public DagWorkflowEngine(List<WorkflowNodeHandler> executors, TopologyValidator topologyValidator,
+                             GraphBuilder graphBuilder, ExecutionHistoryService executionHistoryService) {
         this.topologyValidator = topologyValidator;
         this.graphBuilder = graphBuilder;
+        this.executionHistoryService = executionHistoryService;
         this.nodeExecutors = new HashMap<>();
         for (WorkflowNodeHandler executor : executors) {
             this.nodeExecutors.put(executor.getNodeType(), executor);
@@ -87,6 +94,8 @@ public class DagWorkflowEngine {
 
         // Initialize execution context
         EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        Long executionId = executionHistoryService.createExecution(workflowDSL.getFlowId(), TRIGGER_SOURCE_API);
+        EngineContextHolder.get().setExecutionId(executionId);
 
         // Emit workflow start event
         workflowCallback.onWorkflowStart();
@@ -106,9 +115,11 @@ public class DagWorkflowEngine {
             log.info("Workflow: {} execution completed successfully", sid);
             // Emit workflow end event
             workflowCallback.onWorkflowEnd(new NodeRunResult());
+            executionHistoryService.completeExecution(executionId, ExecutionStatusEnum.SUCCESS.name());
         } catch (Exception e) {
             // Emit workflow error-end event
             workflowCallback.onWorkflowEnd(new NodeRunResult());
+            executionHistoryService.completeExecution(executionId, ExecutionStatusEnum.FAILED.name());
             throw e;
         } finally {
             // Drain all pending messages

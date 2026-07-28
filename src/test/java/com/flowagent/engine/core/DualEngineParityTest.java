@@ -16,8 +16,12 @@ import com.flowagent.engine.node.FlowEventCallback;
 import com.flowagent.engine.node.callback.WorkflowMsgCallback;
 import com.flowagent.engine.domain.NodeRunResult;
 import com.flowagent.engine.domain.NodeState;
+import com.flowagent.persistence.service.ExecutionHistoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -32,11 +36,15 @@ import static org.junit.jupiter.api.Assertions.*;
  * while preserving the full AbstractNodeHandler pipeline (input resolution,
  * output storage, callback events) for realistic execution flow.
  */
+@ExtendWith(MockitoExtension.class)
 class DualEngineParityTest {
 
     private TopologyValidator topologyValidator;
     private GraphBuilder graphBuilder;
     private List<WorkflowNodeHandler> stubExecutors;
+
+    @Mock
+    private ExecutionHistoryService executionHistoryService;
 
     @BeforeEach
     void setUp() {
@@ -65,7 +73,7 @@ class DualEngineParityTest {
         // --- LEGACY sequential ---
         WorkflowContextStore seqPool = new WorkflowContextStore();
         CapturingFlowEventCallback seqCb = new CapturingFlowEventCallback();
-        DagWorkflowEngine seqEngine = new DagWorkflowEngine(stubExecutors, topologyValidator, graphBuilder);
+        DagWorkflowEngine seqEngine = new DagWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, executionHistoryService);
         seqEngine.execute(dsl, seqPool, inputs, seqCb);
         Map<String, NodeStatusEnum> seqStatuses = captureNodeStatuses(dsl);
         Map<String, Map<String, Object>> seqPoolSnap = snapshotWorkflowContextStore(seqPool, dsl);
@@ -73,7 +81,7 @@ class DualEngineParityTest {
         // --- LEGACY parallel ---
         WorkflowContextStore parPool = new WorkflowContextStore();
         CapturingFlowEventCallback parCb = new CapturingFlowEventCallback();
-        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties());
+        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties(), executionHistoryService);
         parEngine.execute(dsl, parPool, inputs, parCb);
         Map<String, NodeStatusEnum> parStatuses = captureNodeStatuses(dsl);
         Map<String, Map<String, Object>> parPoolSnap = snapshotWorkflowContextStore(parPool, dsl);
@@ -135,7 +143,7 @@ class DualEngineParityTest {
         // --- LEGACY sequential ---
         WorkflowContextStore seqPool = new WorkflowContextStore();
         CapturingFlowEventCallback seqCb = new CapturingFlowEventCallback();
-        DagWorkflowEngine seqEngine = new DagWorkflowEngine(stubExecutors, topologyValidator, graphBuilder);
+        DagWorkflowEngine seqEngine = new DagWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, executionHistoryService);
         seqEngine.execute(dsl, seqPool, inputs, seqCb);
         Map<String, NodeStatusEnum> seqStatuses = captureNodeStatuses(dsl);
 

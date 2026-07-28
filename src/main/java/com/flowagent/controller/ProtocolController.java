@@ -2,11 +2,15 @@ package com.flowagent.controller;
 
 import com.flowagent.common.ratelimit.RateLimit;
 import com.flowagent.common.response.ApiResponse;
+import com.flowagent.controller.vo.ExecutionHistoryVo;
 import com.flowagent.controller.vo.WorkflowAddRequest;
 import com.flowagent.controller.vo.WorkflowReadRequest;
 import com.flowagent.controller.vo.WorkflowUpdateRequest;
 import com.flowagent.common.exception.ErrorCode;
+import com.flowagent.persistence.entity.NodeRunLogEntity;
 import com.flowagent.persistence.entity.WorkflowEntity;
+import com.flowagent.persistence.entity.WorkflowExecutionEntity;
+import com.flowagent.persistence.service.ExecutionHistoryService;
 import com.flowagent.persistence.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,7 +19,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -23,9 +29,11 @@ import java.util.Map;
 public class ProtocolController {
 
     private final WorkflowService workflowService;
+    private final ExecutionHistoryService executionHistoryService;
 
-    public ProtocolController(WorkflowService workflowService) {
+    public ProtocolController(WorkflowService workflowService, ExecutionHistoryService executionHistoryService) {
         this.workflowService = workflowService;
+        this.executionHistoryService = executionHistoryService;
     }
 
     @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
@@ -106,6 +114,58 @@ public class ProtocolController {
             return ApiResponse.fail(ErrorCode.PROTOCOL_DELETE_ERROR.getCode(),
                     ErrorCode.PROTOCOL_DELETE_ERROR.getMsg(), ApiResponse.generateTraceId());
         }
+    }
+
+    @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @PostMapping("/executions")
+    public ApiResponse listExecutions(@RequestBody ExecutionListRequest request) {
+        try {
+            List<WorkflowExecutionEntity> executions = executionHistoryService
+                    .listExecutions(request.getFlowId(), request.getPage(), request.getSize());
+            long total = executionHistoryService.countExecutions(request.getFlowId());
+            List<ExecutionHistoryVo> records = executions.stream()
+                    .map(ExecutionHistoryVo::fromExecution)
+                    .collect(Collectors.toList());
+            return ApiResponse.success(Map.of("records", records, "total", total), ApiResponse.generateTraceId());
+        } catch (Exception e) {
+            log.error("Failed to list executions", e);
+            return ApiResponse.fail(ErrorCode.FLOW_GET_ERROR.getCode(),
+                    ErrorCode.FLOW_GET_ERROR.getMsg(), ApiResponse.generateTraceId());
+        }
+    }
+
+    @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @PostMapping("/execution/detail")
+    public ApiResponse executionDetail(@RequestBody ExecutionDetailRequest request) {
+        try {
+            WorkflowExecutionEntity execution = executionHistoryService.getExecution(request.getExecutionId());
+            if (execution == null) {
+                return ApiResponse.fail(ErrorCode.FLOW_GET_ERROR.getCode(),
+                        "execution not found: " + request.getExecutionId(), ApiResponse.generateTraceId());
+            }
+            ExecutionHistoryVo vo = ExecutionHistoryVo.fromExecution(execution);
+            List<NodeRunLogEntity> nodeLogs = executionHistoryService.getNodeLogs(request.getExecutionId());
+            vo.setNodeLogs(nodeLogs);
+            return ApiResponse.success(vo, ApiResponse.generateTraceId());
+        } catch (Exception e) {
+            log.error("Failed to get execution detail", e);
+            return ApiResponse.fail(ErrorCode.FLOW_GET_ERROR.getCode(),
+                    ErrorCode.FLOW_GET_ERROR.getMsg(), ApiResponse.generateTraceId());
+        }
+    }
+
+    /** Paginated execution-list request. */
+    @lombok.Data
+    public static class ExecutionListRequest {
+        private String flowId;
+        private int page = 1;
+        private int size = 10;
+    }
+
+    /** Execution detail request. */
+    @lombok.Data
+    public static class ExecutionDetailRequest {
+        private Long executionId;
     }
 
 }
