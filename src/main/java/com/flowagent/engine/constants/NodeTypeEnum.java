@@ -6,6 +6,7 @@ public enum NodeTypeEnum {
     LLM("llm"),
     IF_ELSE("if-else"),
     CONDITION_SWITCH("condition-switch"),
+    TOOL("tool"),
     ;
 
     private final String value;

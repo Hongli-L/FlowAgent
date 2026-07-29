@@ -107,7 +107,6 @@ logging:
 workflow:
   engine:
     type: ${WORKFLOW_ENGINE_TYPE:LEGACY}
-    mode: ${WORKFLOW_ENGINE_MODE:SEQUENTIAL}
     node-timeout: 300
     workflow-timeout: 600
     core-pool-size: ${WORKFLOW_CORE_POOL_SIZE:16}
@@ -126,3 +125,7 @@ redisson:
       database: ${REDIS_DB:0}
       connectionPoolSize: 16
       connectionMinimumIdleSize: 4
+
+# HTTP tool node (Phase 2.4): external API invocation timeout for OkHttp client
+tool:
+  timeout-seconds: 10
