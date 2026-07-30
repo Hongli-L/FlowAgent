@@ -12,6 +12,8 @@ import com.flowagent.persistence.entity.WorkflowEntity;
 import com.flowagent.persistence.entity.WorkflowExecutionEntity;
 import com.flowagent.persistence.service.ExecutionHistoryService;
 import com.flowagent.persistence.service.WorkflowService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/workflow/v1/protocol")
+@Tag(name = "Workflow Protocol", description = "Workflow CRUD and execution history")
 public class ProtocolController {
 
     private final WorkflowService workflowService;
@@ -37,6 +40,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "Create workflow", description = "Persists a workflow DSL and validates it on create.")
     @PostMapping("/add")
     public ApiResponse addWorkflow(@RequestBody WorkflowAddRequest request) {
         try {
@@ -65,6 +69,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "Get workflow", description = "Returns a stored workflow by flowId.")
     @PostMapping("/get")
     public ApiResponse getWorkflow(@RequestBody WorkflowReadRequest request) {
         try {
@@ -78,6 +83,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "Update workflow", description = "Validates and updates a workflow DSL by flowId.")
     @PostMapping("/update/{flowId}")
     public ApiResponse updateWorkflow(@PathVariable String flowId, @RequestBody WorkflowUpdateRequest request) {
         try {
@@ -104,6 +110,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 10, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "Delete workflow", description = "Deletes a workflow by flowId.")
     @PostMapping("/delete")
     public ApiResponse deleteWorkflow(@RequestBody WorkflowReadRequest request) {
         try {
@@ -117,6 +124,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "List executions", description = "Paginated execution history for a workflow (records + total).")
     @PostMapping("/executions")
     public ApiResponse listExecutions(@RequestBody ExecutionListRequest request) {
         try {
@@ -135,6 +143,7 @@ public class ProtocolController {
     }
 
     @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
+    @Operation(summary = "Execution detail", description = "Returns one execution with its per-node run logs.")
     @PostMapping("/execution/detail")
     public ApiResponse executionDetail(@RequestBody ExecutionDetailRequest request) {
         try {

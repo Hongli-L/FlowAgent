@@ -129,3 +129,14 @@ redisson:
 # HTTP tool node (Phase 2.4): external API invocation timeout for OkHttp client
 tool:
   timeout-seconds: 10
+
+# API documentation (F0): interactive Swagger UI at /swagger-ui.html, OpenAPI JSON at /v3/api-docs.
+# Scoped to controllers so actuator/error endpoints stay out of the console.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    try-it-out-enabled: true
+    disable-swagger-default-url: true
+  packages-to-scan: com.flowagent.controller

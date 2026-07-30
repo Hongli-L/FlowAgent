@@ -8,6 +8,8 @@ import com.flowagent.engine.dsl.model.WorkflowDSL;
 import com.flowagent.engine.node.FlowEventCallback;
 import com.flowagent.engine.node.callback.SseFlowEventCallback;
 import com.flowagent.persistence.service.WorkflowService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -19,6 +21,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/workflow")
+@Tag(name = "Workflow Execution", description = "Streaming execution entrypoint for a workflow")
 public class WorkflowController {
 
     private final WorkflowService workflowService;
@@ -31,6 +34,7 @@ public class WorkflowController {
 
     @RateLimit(rate = 20, rateInterval = 1, key = RateLimit.Dimension.IP)
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Execute workflow (SSE)", description = "Runs a workflow by flowId and streams node events over Server-Sent Events.")
     public SseEmitter executeWorkflow(@RequestBody WorkflowRequest request) {
         log.info("Workflow execution request: flowId={}, engine={}, mode={}, inputs={}",
                 request.getFlowId(), engineFactory.activeType(), engineFactory.activeMode(), request.getInputs());

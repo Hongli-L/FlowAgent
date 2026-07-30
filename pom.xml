@@ -37,6 +37,7 @@
         <guava.version>33.5.0-jre</guava.version>
         <redisson.version>3.30.0</redisson.version>
         <embedded-redis.version>1.4.3</embedded-redis.version>
+        <springdoc.version>2.8.17</springdoc.version>
     </properties>
 
     <dependencies>
@@ -161,6 +162,13 @@
             <artifactId>embedded-redis</artifactId>
             <version>${embedded-redis.version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <!-- API documentation (F0: zero-code interactive API console via Swagger UI) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
         </dependency>
 
     </dependencies>
