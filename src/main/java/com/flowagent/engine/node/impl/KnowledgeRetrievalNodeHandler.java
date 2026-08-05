@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -138,7 +139,13 @@ public class KnowledgeRetrievalNodeHandler extends AbstractNodeHandler {
     }
 
     private Set<String> tokenSet(String text) {
-        return Set.of(text.toLowerCase().split("\\W+"));
+        Set<String> set = new LinkedHashSet<>();
+        for (String token : text.toLowerCase().split("\\W+")) {
+            if (!token.isEmpty()) {
+                set.add(token);
+            }
+        }
+        return set;
     }
 
     private double jaccard(Set<String> a, Set<String> b) {
