@@ -6,6 +6,7 @@ import org.redisson.config.Config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Central Redis client configuration.
@@ -18,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 public class RedisConfiguration {
 
     @Bean
+    @Profile("!local")
     public RedissonClient redissonClient(
             @Value("${spring.data.redis.host:localhost}") String host,
             @Value("${spring.data.redis.port:6379}") int port,

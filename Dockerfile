@@ -15,12 +15,12 @@ COPY target/flowagent-engine.jar /app/flowagent-engine.jar
 # Create log directory
 RUN mkdir -p /app/logs
 
-# Expose port
-EXPOSE 7881
+# Expose port (matches server.port=7880 in application.yml)
+EXPOSE 7880
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:7881/actuator/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:7880/actuator/health || exit 1
 
 # Start application
 ENTRYPOINT ["java", \

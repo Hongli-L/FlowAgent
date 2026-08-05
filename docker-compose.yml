@@ -1,0 +1,42 @@
+# Phase 1 platform pivot: one-command local stack for the PaiFlow engine.
+# MySQL  = primary metadata store (Flyway-migrated on startup).
+# Redis  = cache / stream / distributed lock.
+# PostgreSQL (pgvector, for 2.15 RAG) and MinIO (object store) are added in later phases.
+services:
+  mysql:
+    image: mysql:8.0.36
+    container_name: paiflow-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: flowagent
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - paiflow
+
+  redis:
+    image: redis:7-alpine
+    container_name: paiflow-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - paiflow
+
+volumes:
+  mysql-data:
+
+networks:
+  paiflow:
+    driver: bridge

@@ -70,6 +70,24 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway DB migrations (Phase 1 platform pivot: MySQL as primary store) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <!-- In-memory DB for the zero-setup 'local' profile (H2 + MODE=MySQL) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- HTTP Client -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
@@ -156,12 +174,11 @@
             <version>${guava.version}</version>
         </dependency>
 
-        <!-- Embedded Redis for tests (no external Redis required) -->
+        <!-- Embedded Redis: used by tests, and by the 'local' profile to serve Redis with zero setup -->
         <dependency>
             <groupId>com.github.codemonstur</groupId>
             <artifactId>embedded-redis</artifactId>
             <version>${embedded-redis.version}</version>
-            <scope>test</scope>
         </dependency>
 
         <!-- API documentation (F0: zero-code interactive API console via Swagger UI) -->

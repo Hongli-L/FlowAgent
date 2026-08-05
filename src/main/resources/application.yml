@@ -7,10 +7,18 @@ spring:
   application:
     name: flowagent
 
-  # Execute schema.sql on every startup so tables self-bootstrap (idempotent via IF NOT EXISTS).
+  # Flyway owns schema creation in the default (MySQL) profile. sql.init is disabled here so
+  # Flyway is the single source of truth; the 'local' (H2) profile re-enables sql.init.
   sql:
     init:
-      mode: always
+      mode: never
+
+  # Flyway DB migrations (Phase 1 platform pivot). Migrations live in db/migration
+  # (V1 baseline = flow table, V2 = execution history tables).
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
 
   # Redis middleware (Phase 2.2): Redisson distributed lock + two-level cache + rate limit
   data:
@@ -28,7 +36,7 @@ spring:
   # RedissonClient is built explicitly in RedisConfiguration; suppress the starter auto-config
   # to avoid a duplicate RedissonClient bean.
   autoconfigure:
-    exclude: org.redisson.spring.starter.RedissonAutoConfiguration
+    exclude: org.redisson.spring.starter.RedissonAutoConfigurationV2
 
   # Database configuration
   datasource:
@@ -129,6 +137,15 @@ redisson:
 # HTTP tool node (Phase 2.4): external API invocation timeout for OkHttp client
 tool:
   timeout-seconds: 10
+
+# RAG embedding endpoint (2.15). OpenAI-compatible base URL; the model provider is selected purely
+# by configuration (OpenAI / Qwen / local server), never hard-coded. Leave url blank to defer
+# until a provider is configured.
+paiflow:
+  embedding:
+    url: ${EMBEDDING_URL:}
+    api-key: ${EMBEDDING_API_KEY:}
+    model: ${EMBEDDING_MODEL:text-embedding-3-small}
 
 # API documentation (F0): interactive Swagger UI at /swagger-ui.html, OpenAPI JSON at /v3/api-docs.
 # Scoped to controllers so actuator/error endpoints stay out of the console.

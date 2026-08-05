@@ -51,4 +51,11 @@ application-local.properties
 
 # Planning documents (internal, not for public repo)
 DEVELOPMENT_PLAN.md
+docs/paiflow-interview-guide.md
 ENGINES.md
+
+# Frontend (Vite build output + deps, not for version control)
+web/node_modules/
+web/dist/
+web/dist*/
+
