@@ -8,6 +8,7 @@ public enum NodeTypeEnum {
     CONDITION_SWITCH("condition-switch"),
     TOOL("tool"),
     AGENT("agent"),
+    KNOWLEDGE("knowledge"),
     ;
 
     private final String value;
