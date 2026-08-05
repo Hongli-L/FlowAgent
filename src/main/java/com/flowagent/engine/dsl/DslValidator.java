@@ -25,7 +25,8 @@ public class DslValidator {
             NodeTypeEnum.LLM,
             NodeTypeEnum.IF_ELSE,
             NodeTypeEnum.CONDITION_SWITCH,
-            NodeTypeEnum.TOOL
+            NodeTypeEnum.TOOL,
+            NodeTypeEnum.AGENT
     );
 
     public void validate(WorkflowDSL workflowDSL) {

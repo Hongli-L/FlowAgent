@@ -107,7 +107,9 @@ public class LangGraphEngine implements WorkflowExecutionEngine {
                 orderStreamResultQ
         );
 
-        EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        EngineContextHolder.EngineContext ctx = EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        ctx.setWorkflowNodes(workflowDSL.getNodes());
+        ctx.setNodeExecutors(this.nodeExecutors);
         workflowCallback.onWorkflowStart();
 
         try {

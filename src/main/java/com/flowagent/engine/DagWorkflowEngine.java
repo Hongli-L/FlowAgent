@@ -93,7 +93,9 @@ public class DagWorkflowEngine {
 
 
         // Initialize execution context
-        EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        EngineContextHolder.EngineContext ctx = EngineContextHolder.initContext(workflowDSL.getFlowId(), workflowDSL.getUuid(), workflowCallback);
+        ctx.setWorkflowNodes(workflowDSL.getNodes());
+        ctx.setNodeExecutors(this.nodeExecutors);
         Long executionId = executionHistoryService.createExecution(workflowDSL.getFlowId(), TRIGGER_SOURCE_API);
         EngineContextHolder.get().setExecutionId(executionId);
 

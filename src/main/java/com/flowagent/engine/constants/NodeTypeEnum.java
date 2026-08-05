@@ -7,6 +7,7 @@ public enum NodeTypeEnum {
     IF_ELSE("if-else"),
     CONDITION_SWITCH("condition-switch"),
     TOOL("tool"),
+    AGENT("agent"),
     ;
 
     private final String value;
