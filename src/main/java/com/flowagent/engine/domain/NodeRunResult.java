@@ -53,6 +53,18 @@ public class NodeRunResult {
     private GenerateUsage tokenCost = new GenerateUsage();
 
     /**
+     * Model that actually served this LLM node (after multi-model fallback).
+     * {@code null} for non-LLM nodes or before execution.
+     */
+    private String modelUsed;
+
+    /**
+     * Number of model endpoints configured for this LLM node (primary + fallbacks).
+     * Used for observability: 1 means no fallback was configured.
+     */
+    private int modelAttempts;
+
+    /**
      * Error information if the node execution failed.
      */
     private NodeCustomException error = null;

@@ -19,6 +19,9 @@ public class ModelServiceClient {
     @Autowired
     private OpenAiStyleLlmIntegration llmIntergration;
 
+    @Autowired
+    private ModelResilienceService resilienceService;
+
 
     /**
      * Call LLM for chat completion.
@@ -27,6 +30,9 @@ public class ModelServiceClient {
      * @param callback streaming callback for token-by-token response
      */
     public LlmResVo chatCompletion(LlmReqBo req, LlmCallback callback) {
-        return llmIntergration.call(req, callback);
+        // Route through the per-endpoint circuit breaker; the breaker is OPEN-fast-fail is
+        // translated inside resilienceService into a recoverable ModelInvocationException so the
+        // 2.16 multi-model fallback loop can move on to the next model.
+        return resilienceService.invoke(req, callback, () -> llmIntergration.call(req, callback));
     }
 }

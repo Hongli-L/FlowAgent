@@ -1,6 +1,7 @@
 package com.flowagent.engine.integration.model;
 
 import com.flowagent.common.enums.MsgTypeEnum;
+import com.flowagent.common.exception.ModelInvocationException;
 import com.flowagent.engine.integration.model.bo.LlmCallback;
 import com.flowagent.engine.integration.model.bo.LlmReqBo;
 import com.flowagent.engine.integration.model.bo.LlmResVo;
@@ -109,9 +110,19 @@ public class OpenAiStyleLlmIntegration {
             return new LlmResVo(tokenUsage, response.toString(), reasoningContent.toString());
         } catch (Exception e) {
             String errorMessage = buildErrorMessage(e);
-            log.error("Error calling OpenAI API: {}", errorMessage, e);
-            throw new RuntimeException(errorMessage, e);
+            Integer httpStatus = extractHttpStatus(e);
+            log.error("Error calling model API: {}", errorMessage, e);
+            throw new ModelInvocationException(errorMessage, e, httpStatus, true);
         }
+    }
+
+    private Integer extractHttpStatus(Exception e) {
+        Throwable rootCause = findRootCause(e);
+        Throwable actual = rootCause != null ? rootCause : e;
+        if (actual instanceof WebClientResponseException responseException) {
+            return responseException.getStatusCode().value();
+        }
+        return null;
     }
 
     private String buildErrorMessage(Exception e) {

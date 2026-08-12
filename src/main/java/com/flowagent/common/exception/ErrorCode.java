@@ -12,6 +12,7 @@ public enum ErrorCode {
     INVALID_NODE_CONFIGURATION(1003, "Invalid node configuration"),
     TIMEOUT_ERROR(1005, "Execution timeout"),
     INTERRUPTED_ERROR(1006, "Execution interrupted"),
+    MODEL_INVOCATION_FAILED(1010, "All configured models failed"),
 
     PROTOCOL_VALIDATION_ERROR(20100, "Protocol validation failed"),
     PROTOCOL_CREATE_ERROR(20102, "Protocol creation error"),

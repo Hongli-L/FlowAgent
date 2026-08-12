@@ -3,6 +3,9 @@ package com.flowagent.engine.node.impl.llm;
 import com.alibaba.fastjson2.JSONObject;
 import com.flowagent.common.enums.MsgTypeEnum;
 import com.flowagent.common.enums.NodeExecStatusEnum;
+import com.flowagent.common.exception.ErrorCode;
+import com.flowagent.common.exception.ModelInvocationException;
+import com.flowagent.common.exception.NodeCustomException;
 import com.flowagent.engine.constants.NodeTypeEnum;
 import com.flowagent.engine.context.EngineContextHolder;
 import com.flowagent.engine.domain.NodeRunResult;
@@ -11,7 +14,10 @@ import com.flowagent.engine.domain.callbacks.GenerateUsage;
 import com.flowagent.engine.dsl.model.Node;
 import com.flowagent.engine.dsl.model.OutputItem;
 import com.flowagent.engine.integration.model.LlmChatHistory;
+import com.flowagent.engine.integration.model.ModelEndpoint;
+import com.flowagent.engine.integration.model.ModelFallbackPolicy;
 import com.flowagent.engine.integration.model.ModelServiceClient;
+import com.flowagent.engine.integration.model.bo.LlmCallback;
 import com.flowagent.engine.integration.model.bo.LlmReqBo;
 import com.flowagent.engine.integration.model.bo.LlmResVo;
 import com.flowagent.engine.node.AbstractNodeHandler;
@@ -19,9 +25,11 @@ import com.flowagent.engine.dsl.VariableTemplateRender;
 import io.micrometer.common.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,44 +69,116 @@ public class LLMNodeHandler extends AbstractNodeHandler {
             log.debug("LLM prompt (resolved): {}", resolvedPrompt);
         }
 
-        // Execute LLM chat completion
-        LlmReqBo req = JSONObject.parseObject(JSONObject.toJSONString(nodeParam), LlmReqBo.class);
-        req.setSystemMsg(systemPrompt);
-        req.setUserMsg(resolvedPrompt);
-        req.setHistory(history);
-        req.setNodeId(node.getId());
-        req.setModel((String) nodeParam.get("domain"));
-
-
         String chatId = EngineContextHolder.get().getChatId();
         LlmChatHistory.newChat(chatId, node.getId());
         if (StringUtils.isNotBlank(systemPrompt)) {
             LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.SYSTEM, systemPrompt);
         }
         LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.USER, resolvedPrompt);
-        LlmResVo llmOutput = modelServiceClient.chatCompletion(req, chatResponse -> {
+
+        // Model endpoints: primary first, then any configured fallbacks.
+        List<ModelEndpoint> endpoints = resolveEndpoints(nodeParam);
+
+        // The real streaming callback pushes tokens to the UI. During a fallback attempt we must
+        // NOT emit partial tokens from a model that is about to fail, so we buffer chunks and only
+        // flush them to the real callback once an attempt actually succeeds.
+        LlmCallback realStreamCallback = chatResponse -> {
             if (!CollectionUtils.isEmpty(chatResponse.getResults())) {
                 nodeState.callback().onNodeProcess(0, node.getId(), node.getData().getNodeMeta().getAliasName(),
                         chatResponse.getResult().getOutput().getText(),
                         (String) chatResponse.getResult().getOutput().getMetadata().get("reasoningContent"));
             }
-        });
+        };
 
-        LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.ASSISTANT, llmOutput.content());
-        if (StringUtils.isNotBlank(llmOutput.thinkContent())) {
-            LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.THINKING, llmOutput.thinkContent());
+        ModelInvocationException lastFailure = null;
+        for (int i = 0; i < endpoints.size(); i++) {
+            ModelEndpoint endpoint = endpoints.get(i);
+            BufferingLlmCallback buffer = new BufferingLlmCallback();
+            try {
+                LlmReqBo req = buildRequest(nodeParam, systemPrompt, resolvedPrompt, history, node, endpoint);
+                LlmResVo llmOutput = modelServiceClient.chatCompletion(req, buffer);
+
+                // Success on this endpoint: flush the buffered stream, persist, and return.
+                buffer.flushTo(realStreamCallback);
+                LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.ASSISTANT, llmOutput.content());
+                if (StringUtils.isNotBlank(llmOutput.thinkContent())) {
+                    LlmChatHistory.addMessage(chatId, node.getId(), MsgTypeEnum.THINKING, llmOutput.thinkContent());
+                }
+
+                Map<String, Object> outputs = formatOutputs(llmOutput, node.getData().getOutputs());
+                NodeRunResult result = new NodeRunResult();
+                result.setInputs(inputs);
+                result.setOutputs(outputs);
+                result.setRawOutput(llmOutput.content());
+                result.setTokenCost(formatUsage(llmOutput.usage()));
+                result.setStatus(NodeExecStatusEnum.SUCCESS);
+                result.setModelUsed(endpoint.domain());
+                result.setModelAttempts(endpoints.size());
+                if (endpoints.size() > 1) {
+                    log.info("LLM node {} served by model '{}' (attempt {}/{}); {} fallback model(s) configured",
+                            node.getId(), endpoint.domain(), i + 1, endpoints.size(), endpoints.size() - 1);
+                }
+                return result;
+            } catch (ModelInvocationException ex) {
+                lastFailure = ex;
+                if (ModelFallbackPolicy.isFallbackEligible(ex) && i + 1 < endpoints.size()) {
+                    log.warn("LLM node {} model '{}' failed (attempt {}/{}): {} - falling back to next model",
+                            node.getId(), endpoint.domain(), i + 1, endpoints.size(), ex.getMessage());
+                } else {
+                    log.error("LLM node {} model '{}' failed (attempt {}/{}): {} - no fallback available",
+                            node.getId(), endpoint.domain(), i + 1, endpoints.size(), ex.getMessage());
+                }
+                // buffer is discarded; partial tokens from this failed attempt are never shown
+            }
         }
 
-        // Format LLM output into structured response
-        Map<String, Object> outputs = formatOutputs(llmOutput, node.getData().getOutputs());
+        String detail = lastFailure != null ? lastFailure.getMessage() : "unknown error";
+        throw new NodeCustomException(ErrorCode.MODEL_INVOCATION_FAILED,
+                "All " + endpoints.size() + " model(s) failed for node " + node.getId() + ". Last error: " + detail);
+    }
 
-        NodeRunResult result = new NodeRunResult();
-        result.setInputs(inputs);
-        result.setOutputs(outputs);
-        result.setRawOutput(llmOutput.content());
-        result.setTokenCost(formatUsage(llmOutput.usage()));
-        result.setStatus(NodeExecStatusEnum.SUCCESS);
-        return result;
+    /**
+     * Build the ordered list of model endpoints to try: the primary model (from the top-level
+     * {@code domain}/{@code url}/{@code apiKey}) followed by any {@code fallbackModels}.
+     */
+    private List<ModelEndpoint> resolveEndpoints(Map<String, Object> nodeParam) {
+        List<ModelEndpoint> endpoints = new ArrayList<>();
+        endpoints.add(new ModelEndpoint(
+                asString(nodeParam.get("domain")),
+                asString(nodeParam.get("url")),
+                asString(nodeParam.get("apiKey"))));
+
+        Object fallbackObj = nodeParam.get("fallbackModels");
+        if (fallbackObj instanceof List<?> fallbackList) {
+            for (Object item : fallbackList) {
+                if (item instanceof Map<?, ?> map) {
+                    String domain = asString(map.get("domain"));
+                    if (StringUtils.isBlank(domain)) {
+                        continue; // skip fallback entries without a model name
+                    }
+                    endpoints.add(new ModelEndpoint(domain,
+                            asString(map.get("url")), asString(map.get("apiKey"))));
+                }
+            }
+        }
+        return endpoints;
+    }
+
+    private static String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private LlmReqBo buildRequest(Map<String, Object> nodeParam, String systemPrompt, String resolvedPrompt,
+                                  List<LlmChatHistory.ChatItem> history, Node node, ModelEndpoint endpoint) {
+        LlmReqBo req = JSONObject.parseObject(JSONObject.toJSONString(nodeParam), LlmReqBo.class);
+        req.setSystemMsg(systemPrompt);
+        req.setUserMsg(resolvedPrompt);
+        req.setHistory(history);
+        req.setNodeId(node.getId());
+        req.setModel(endpoint.domain());
+        req.setUrl(endpoint.url());
+        req.setApiKey(endpoint.apiKey());
+        return req;
     }
 
     private Integer getModelId(Map<String, Object> nodeParam) {
@@ -208,5 +288,28 @@ public class LLMNodeHandler extends AbstractNodeHandler {
         generateUsage.setPromptTokens(usage.getPromptTokens());
         generateUsage.setTotalTokens(usage.getTotalTokens());
         return generateUsage;
+    }
+
+    /**
+     * Buffers streamed {@link ChatResponse} chunks for a single model attempt. Chunks are only
+     * forwarded to the real callback via {@link #flushTo(LlmCallback)} when the attempt succeeds,
+     * so a model that fails mid-stream never leaks partial tokens to the UI. {@link #discard()}
+     * simply drops the buffered chunks.
+     */
+    static class BufferingLlmCallback implements LlmCallback {
+        private final List<ChatResponse> chunks = new ArrayList<>();
+
+        @Override
+        public void onResponse(ChatResponse response) {
+            chunks.add(response);
+        }
+
+        void flushTo(LlmCallback delegate) {
+            chunks.forEach(delegate::onResponse);
+        }
+
+        void discard() {
+            chunks.clear();
+        }
     }
 }
