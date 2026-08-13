@@ -440,4 +440,84 @@ class DualEngineParityTest {
                     "WorkflowContextStore value mismatch for " + nodeId + "." + key);
         }
     }
+
+    /**
+     * Linear start -> llm -> end: PARALLEL and LANGGRAPH engines must agree on node statuses
+     * and on the LLM output value.
+     */
+    @Test
+    void linearParallelVsLangGraph_match() throws Exception {
+        WorkflowDSL dsl = createLinearDsl();
+        Map<String, Object> inputs = Map.of("user_input", "Hello");
+
+        WorkflowContextStore parPool = new WorkflowContextStore();
+        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties(), executionHistoryService);
+        parEngine.execute(dsl, parPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> parStatuses = captureNodeStatuses(dsl);
+
+        WorkflowContextStore lgPool = new WorkflowContextStore();
+        LangGraphEngine lgEngine = new LangGraphEngine(stubExecutors, topologyValidator, graphBuilder);
+        lgEngine.execute(dsl, lgPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> lgStatuses = captureNodeStatuses(dsl);
+
+        for (String nodeId : parStatuses.keySet()) {
+            assertEquals(parStatuses.get(nodeId), lgStatuses.get(nodeId),
+                    "PARALLEL vs LANGGRAPH status mismatch for " + nodeId);
+        }
+        assertEquals(parPool.get("llm::002", "output"), lgPool.get("llm::002", "output"),
+                "LLM output should match across PARALLEL and LANGGRAPH");
+    }
+
+    /**
+     * Linear start -> llm -> end: LEGACY-SEQUENTIAL and PARALLEL engines must agree.
+     */
+    @Test
+    void linearLegacySeqVsParallel_match() throws Exception {
+        WorkflowDSL dsl = createLinearDsl();
+        Map<String, Object> inputs = Map.of("user_input", "Hello");
+
+        WorkflowContextStore seqPool = new WorkflowContextStore();
+        DagWorkflowEngine seqEngine = new DagWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, executionHistoryService);
+        seqEngine.execute(dsl, seqPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> seqStatuses = captureNodeStatuses(dsl);
+
+        WorkflowContextStore parPool = new WorkflowContextStore();
+        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties(), executionHistoryService);
+        parEngine.execute(dsl, parPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> parStatuses = captureNodeStatuses(dsl);
+
+        for (String nodeId : seqStatuses.keySet()) {
+            assertEquals(seqStatuses.get(nodeId), parStatuses.get(nodeId),
+                    "LEGACY-SEQ vs PARALLEL status mismatch for " + nodeId);
+        }
+        assertEquals(seqPool.get("llm::002", "output"), parPool.get("llm::002", "output"),
+                "LLM output should match across LEGACY-SEQ and PARALLEL");
+    }
+
+    /**
+     * Branching workflow: PARALLEL and LANGGRAPH must both execute the success path (SUCCESS)
+     * and normalize the unreachable fail path to SKIP.
+     */
+    @Test
+    void branchingParallelVsLangGraph_match() throws Exception {
+        WorkflowDSL dsl = createBranchingDsl();
+        Map<String, Object> inputs = Map.of("user_input", "Hello");
+
+        WorkflowContextStore parPool = new WorkflowContextStore();
+        ParallelWorkflowEngine parEngine = new ParallelWorkflowEngine(stubExecutors, topologyValidator, graphBuilder, new EngineProperties(), executionHistoryService);
+        parEngine.execute(dsl, parPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> parStatuses = captureNodeStatuses(dsl);
+
+        WorkflowContextStore lgPool = new WorkflowContextStore();
+        LangGraphEngine lgEngine = new LangGraphEngine(stubExecutors, topologyValidator, graphBuilder);
+        lgEngine.execute(dsl, lgPool, inputs, new CapturingFlowEventCallback());
+        Map<String, NodeStatusEnum> lgStatuses = captureNodeStatuses(dsl);
+
+        assertEquals(NodeStatusEnum.SUCCESS, parStatuses.get("llm::002"));
+        assertEquals(NodeStatusEnum.SUCCESS, lgStatuses.get("llm::002"));
+        assertEquals(NodeStatusEnum.SUCCESS, parStatuses.get("node-end::003"));
+        assertEquals(NodeStatusEnum.SUCCESS, lgStatuses.get("node-end::003"));
+        assertEquals(NodeStatusEnum.SKIP, parStatuses.get("node-end::004"));
+        assertEquals(NodeStatusEnum.SKIP, lgStatuses.get("node-end::004"));
+    }
 }

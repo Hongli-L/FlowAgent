@@ -71,4 +71,39 @@ public class ConditionEvaluatorTest {
         assertFalse(ConditionEvaluator.evaluate("", pool));
         assertFalse(ConditionEvaluator.evaluate("   ", pool));
     }
+
+    @Test
+    void literalBooleanExpressions() {
+        WorkflowContextStore pool = new WorkflowContextStore();
+        assertTrue(ConditionEvaluator.evaluate("true", pool));
+        assertFalse(ConditionEvaluator.evaluate("false", pool));
+    }
+
+    @Test
+    void lessThanOrEqualOperator() {
+        WorkflowContextStore pool = poolWith("llm::002", "score", 75);
+        assertTrue(ConditionEvaluator.evaluate("{{llm::002.score}} <= 75", pool));
+        assertFalse(ConditionEvaluator.evaluate("{{llm::002.score}} <= 74", pool));
+        assertTrue(ConditionEvaluator.evaluate("{{llm::002.score}} >= 75", pool));
+    }
+
+    @Test
+    void mixedAndOrPrecedenceBindsAndTighter() {
+        // (x==9 && y==9) || (y==2)  -> OR binds looser, so this is TRUE because y==2
+        WorkflowContextStore pool = poolWith("a", "x", 1, "b", "y", 2);
+        assertTrue(ConditionEvaluator.evaluate("{{a.x}} == 9 && {{b.y}} == 9 || {{b.y}} == 2", pool));
+    }
+
+    @Test
+    void unresolvedReferenceIsFalsey() {
+        WorkflowContextStore pool = poolWith("a", "x", 1);
+        assertFalse(ConditionEvaluator.evaluate("{{missing.node}} == 1", pool));
+        assertFalse(ConditionEvaluator.evaluate("{{missing.node}}", pool));
+    }
+
+    @Test
+    void containsSupportsSingleQuotedLiteral() {
+        WorkflowContextStore pool = poolWith("s", "text", "I want a refund");
+        assertTrue(ConditionEvaluator.evaluate("{{s.text}} contains 'refund'", pool));
+    }
 }

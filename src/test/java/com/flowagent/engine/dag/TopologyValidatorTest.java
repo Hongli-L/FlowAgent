@@ -100,4 +100,65 @@ class TopologyValidatorTest {
         NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
         assertTrue(ex.getMessage().contains("missing nodes or edges"));
     }
+
+    @Test
+    void shouldRejectMissingEndNode() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(
+                        DagTestFixtures.node("node-start::001"),
+                        DagTestFixtures.node("llm::002")
+                ),
+                List.of(DagTestFixtures.edge("node-start::001", "llm::002"))
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
+        assertTrue(ex.getMessage().contains("start or end"));
+    }
+
+    @Test
+    void shouldRejectDuplicateNodeId() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(DagTestFixtures.node("llm::002"), DagTestFixtures.node("llm::002")),
+                List.of(DagTestFixtures.edge("llm::002", "llm::002"))
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
+        assertTrue(ex.getMessage().contains("duplicate node id"));
+    }
+
+    @Test
+    void shouldRejectEmptyNodeId() {
+        Node node = DagTestFixtures.node("llm::002");
+        node.setId(null);
+        WorkflowDSL dsl = DagTestFixtures.workflow(List.of(node), List.of(DagTestFixtures.edge("a::001", "b::002")));
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
+        assertTrue(ex.getMessage().contains("node id is empty"));
+    }
+
+    @Test
+    void shouldRejectEdgeWithEmptyEndpoint() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(DagTestFixtures.node("node-start::001"), DagTestFixtures.node("node-end::003")),
+                List.of(DagTestFixtures.edge("", "node-end::003"))
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
+        assertTrue(ex.getMessage().contains("edge endpoint is empty"));
+    }
+
+    @Test
+    void shouldDetectSelfLoopCycle() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(
+                        DagTestFixtures.node("node-start::001"),
+                        DagTestFixtures.node("llm::002"),
+                        DagTestFixtures.node("node-end::003")
+                ),
+                List.of(
+                        DagTestFixtures.edge("node-start::001", "llm::002"),
+                        DagTestFixtures.edge("llm::002", "llm::002"),
+                        DagTestFixtures.edge("llm::002", "node-end::003")
+                )
+        );
+        assertTrue(validator.hasCycle(dsl));
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> validator.validate(dsl));
+        assertTrue(ex.getMessage().contains("cycle"));
+    }
 }

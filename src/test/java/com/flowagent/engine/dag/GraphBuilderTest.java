@@ -1,5 +1,6 @@
 package com.flowagent.engine.dag;
 
+import com.flowagent.common.exception.NodeCustomException;
 import com.flowagent.engine.dsl.model.WorkflowDSL;
 import com.flowagent.engine.dsl.model.Edge;
 import com.flowagent.engine.dsl.model.Node;
@@ -10,6 +11,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GraphBuilderTest {
@@ -89,5 +91,57 @@ class GraphBuilderTest {
         assertEquals(2, join.getPreNodes().size());
         assertTrue(join.getPreNodes().contains(left));
         assertTrue(join.getPreNodes().contains(right));
+    }
+
+    @Test
+    void shouldRejectMissingStartNode() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(DagTestFixtures.node("llm::002"), DagTestFixtures.node("node-end::003")),
+                List.of()
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> graphBuilder.build(dsl));
+        assertTrue(ex.getMessage().contains("No start node found"));
+    }
+
+    @Test
+    void shouldRejectUnknownSourceNode() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(DagTestFixtures.node("node-start::001"), DagTestFixtures.node("node-end::003")),
+                List.of(DagTestFixtures.edge("missing::999", "node-end::003"))
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> graphBuilder.build(dsl));
+        assertTrue(ex.getMessage().contains("source node ID"));
+    }
+
+    @Test
+    void shouldRejectUnknownTargetNode() {
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(DagTestFixtures.node("node-start::001"), DagTestFixtures.node("llm::002")),
+                List.of(DagTestFixtures.edge("node-start::001", "missing::999"))
+        );
+        NodeCustomException ex = assertThrows(NodeCustomException.class, () -> graphBuilder.build(dsl));
+        assertTrue(ex.getMessage().contains("target node ID"));
+    }
+
+    @Test
+    void shouldWireFailEdgeToFailNodesOnly() {
+        Node start = DagTestFixtures.node("node-start::001");
+        Node condition = DagTestFixtures.node("if-else::002");
+        Node success = DagTestFixtures.node("llm::003");
+        Node fail = DagTestFixtures.node("node-end::004");
+        WorkflowDSL dsl = DagTestFixtures.workflow(
+                List.of(start, condition, success, fail),
+                List.of(
+                        DagTestFixtures.edge("node-start::001", "if-else::002"),
+                        DagTestFixtures.edge("if-else::002", "llm::003", "branch-1"),
+                        DagTestFixtures.edge("if-else::002", "node-end::004", "fail_branch_1")
+                )
+        );
+
+        graphBuilder.build(dsl);
+
+        assertTrue(condition.getNextNodes().contains(success));
+        assertTrue(condition.getFailNodes().contains(fail));
+        assertTrue(!condition.getNextNodes().contains(fail), "fail edge must not appear in nextNodes");
     }
 }

@@ -39,6 +39,39 @@ class EngineFactoryTest {
         assertThrows(IllegalStateException.class, factory::getEngine);
     }
 
+    @Test
+    void shouldSelectLegacyWhenConfigured() {
+        EngineProperties properties = new EngineProperties();
+        properties.setType("LEGACY");
+        WorkflowExecutionEngine legacy = new StubEngine(EngineType.LEGACY);
+        EngineFactory factory = new EngineFactory(List.of(legacy, new StubEngine(EngineType.LANGGRAPH)), properties);
+
+        assertSame(legacy, factory.getEngine());
+        assertEquals(EngineType.LEGACY, factory.activeType());
+    }
+
+    @Test
+    void shouldDefaultToLegacyWhenTypeUnset() {
+        EngineProperties properties = new EngineProperties();
+        properties.setType(null);
+        WorkflowExecutionEngine legacy = new StubEngine(EngineType.LEGACY);
+        EngineFactory factory = new EngineFactory(List.of(legacy, new StubEngine(EngineType.LANGGRAPH)), properties);
+
+        assertEquals(EngineType.LEGACY, factory.activeType());
+        assertSame(legacy, factory.getEngine());
+    }
+
+    @Test
+    void shouldReportConfiguredParallelMode() {
+        EngineProperties properties = new EngineProperties();
+        properties.setType("LEGACY");
+        properties.setMode("PARALLEL");
+        EngineFactory factory = new EngineFactory(List.of(new StubEngine(EngineType.LEGACY)), properties);
+
+        assertEquals(EngineType.LEGACY, factory.activeType());
+        assertEquals(ExecutionMode.PARALLEL, factory.activeMode());
+    }
+
     private static final class StubEngine implements WorkflowExecutionEngine {
         private final EngineType type;
 
