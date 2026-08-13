@@ -96,6 +96,21 @@ management:
     db:
       enabled: true
 
+# Resilience4j circuit breaker (P1 resilience, pairs with 2.16 multi-model fallback).
+# One breaker per model endpoint (url+model), created on first use from this default config.
+# Metrics auto-bind to Micrometer -> visible on /actuator/metrics and /actuator/health.
+resilience4j:
+  circuitbreaker:
+    sliding-window-type: COUNT_BASED
+    sliding-window-size: 10
+    minimum-number-of-calls: 5
+    failure-rate-threshold: 50
+    wait-duration-in-open-state: 30s
+    permitted-number-of-calls-in-half-open-state: 3
+    automatic-transition-from-open-to-half-open-enabled: true
+    writable-stack-trace-enabled: false
+    register-health-indicator: true
+
 # Logging configuration
 logging:
   level:
