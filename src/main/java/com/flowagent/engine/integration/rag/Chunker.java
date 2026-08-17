@@ -2,6 +2,7 @@ package com.flowagent.engine.integration.rag;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 /**
  * Fixed-size overlapping text splitter used by the RAG pipeline.
@@ -10,6 +11,7 @@ import java.util.List;
  * to be cut at a chunk boundary. Default window is 500 chars with 50 chars of overlap; both
  * are configurable via the constructor.
  */
+@Component
 public class Chunker {
 
     private final int chunkSize;
