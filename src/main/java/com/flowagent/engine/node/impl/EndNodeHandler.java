@@ -2,6 +2,7 @@ package com.flowagent.engine.node.impl;
 
 import com.flowagent.common.enums.EndNodeOutputModeEnum;
 import com.flowagent.common.enums.NodeExecStatusEnum;
+import com.flowagent.engine.WorkflowContextStore;
 import com.flowagent.engine.constants.NodeTypeEnum;
 import com.flowagent.engine.domain.NodeRunResult;
 import com.flowagent.engine.domain.NodeState;
@@ -43,7 +44,7 @@ public class EndNodeHandler extends AbstractNodeHandler {
         if (Objects.equals(outputMode, EndNodeOutputModeEnum.VARIABLE_MODE.getMode())) {
             String template = getTemplate(nodeParam);
             if (!StringUtils.isEmpty(template)) {
-                finalOutput = VariableTemplateRender.render(template, inputs);
+                finalOutput = VariableTemplateRender.render(template, buildRenderContext(node, inputs));
                 log.info("End node: formatted output using template (length={})", finalOutput.length());
             } else {
                 finalOutput = toStr(inputs);
@@ -51,7 +52,7 @@ public class EndNodeHandler extends AbstractNodeHandler {
 
             String reasoningTemplate = getReasonTemplate(nodeParam);
             if (!StringUtils.isEmpty(reasoningTemplate)) {
-                finalReason = VariableTemplateRender.render(reasoningTemplate, inputs);
+                finalReason = VariableTemplateRender.render(reasoningTemplate, buildRenderContext(node, inputs));
             }
         } else {
             finalOutput = toStr(inputs);
@@ -88,6 +89,19 @@ public class EndNodeHandler extends AbstractNodeHandler {
     private String getReasonTemplate(Map<String, Object> nodeParam) {
         Object templateObj = nodeParam.get("reasoningTemplate");
         return templateObj != null ? String.valueOf(templateObj) : "";
+    }
+
+    /**
+     * Build the variable context used to render the End node template.
+     * The template uses {{node-id.field}} references that live in the GLOBAL variable pool
+     * (populated by upstream nodes), so we render against the whole pool — not just the
+     * (usually empty) inputs flowing into the End node. Declared inputs are overlaid last
+     * so they can still take precedence if a name happens to collide.
+     */
+    private Map<String, Object> buildRenderContext(NodeState node, Map<String, Object> inputs) {
+        Map<String, Object> context = new HashMap<>(node.variablePool().getAll());
+        context.putAll(inputs);
+        return context;
     }
 
     private String toStr(Map<String, Object> inputs) {

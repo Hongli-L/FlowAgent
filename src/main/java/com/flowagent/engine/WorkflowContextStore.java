@@ -69,6 +69,15 @@ public class WorkflowContextStore {
         return variables.getOrDefault(nodeId, Map.of());
     }
 
+    /**
+     * Get the entire variable pool as a flat context map: node-id -> (output-name -> value).
+     * Used by the End node to render {{node-id.field}} templates against ALL upstream outputs,
+     * not just the (typically empty) inputs flowing into the End node.
+     */
+    public Map<String, Map<String, Object>> getAll() {
+        return new HashMap<>(variables);
+    }
+
 
     /**
      * Nested value extraction

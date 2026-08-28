@@ -10,6 +10,7 @@ import com.flowagent.engine.dsl.VariableTemplateRender;
 import com.flowagent.engine.dsl.model.Node;
 import com.flowagent.engine.dsl.model.OutputItem;
 import com.flowagent.engine.integration.tool.HttpToolExecutor;
+import com.alibaba.fastjson2.JSON;
 import com.flowagent.engine.integration.tool.ToolInvocationRequest;
 import com.flowagent.engine.integration.tool.ToolInvocationResponse;
 import com.flowagent.engine.node.AbstractNodeHandler;
@@ -83,9 +84,20 @@ public class ToolNodeHandler extends AbstractNodeHandler {
         outputs.put("statusCode", response.getStatusCode());
         outputs.put("body", response.getBody());
 
+        // Best-effort structured view of a JSON response so templates can reference
+        // specific fields (e.g. {{tool::001.bodyJson.full_name}}) instead of dumping
+        // the entire raw body string. Raw `body` is kept for string ops (contains/==).
+        Object bodyJson = tryParseJson(response.getBody());
+        if (bodyJson != null) {
+            outputs.put("bodyJson", bodyJson);
+        }
+
         List<OutputItem> outItems = node.getData().getOutputs();
         if (!CollectionUtils.isEmpty(outItems)) {
             outputs.put(outItems.get(0).getName(), response.getBody());
+            if (bodyJson != null) {
+                outputs.put(outItems.get(0).getName() + "Json", bodyJson);
+            }
         }
 
         // Make response data available to downstream/fail-branch nodes.
@@ -111,6 +123,25 @@ public class ToolNodeHandler extends AbstractNodeHandler {
             return null;
         }
         return VariableTemplateRender.render(String.valueOf(template), inputs);
+    }
+
+    /**
+     * Parse a JSON object/array from a response body, or return null for non-JSON / blank bodies.
+     */
+    private Object tryParseJson(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        String trimmed = body.trim();
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+            return null;
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (Exception e) {
+            log.debug("Tool response body is not valid JSON, skipping bodyJson: {}", e.getMessage());
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
